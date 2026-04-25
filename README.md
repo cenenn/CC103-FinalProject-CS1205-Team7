@@ -21,7 +21,6 @@ loans, record payments, track remaining balances, and get notified about overdue
 - Waiting list for loan requeusts when funds are insufficient and auto-approveved in FIFO order as funds free up
 
 ## Data Structures
-- All structures are hand-built (no STL containers).
 
 | Structure           | Used for                               |Reason
 |---------------------|----------------------------------------|-----------------------------------------------------------------------------------------|
