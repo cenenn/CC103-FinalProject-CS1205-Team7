@@ -15,10 +15,8 @@ loans, record payments, track remaining balances, and get notified about overdue
 - Log repayments and automatically compute the remaining balance.
 - View all active loans sorted by urgency, with each borrower's payment history
 - Get overdue and near-due alerts, with the most urgent loands at the top
-- Prompt to apply interest when a borrower's due date has passed and is still unpaid
 - Undo the most recent transaction in case of innput error
-- Search for a specific borrower by partial, case-sensitive name (recursive)
-- Waiting list for loan requeusts when funds are insufficient and auto-approveved in FIFO order as funds free up
+- Waiting list for loan requeusts when funds are insufficient
 
 ## Data Structures
 
@@ -29,4 +27,8 @@ loans, record payments, track remaining balances, and get notified about overdue
 |Priority Queue       | Flag overdue and near-due loans        | Borrowers with the nearest due dates are shown first.                                   |
 |Linked List          | Per loan payment history               | Append only the records of each borrower's repayments.                                  |
 
-**Prioroity Quue Tiebraker:** When two loans have the same urgency, the one who registered first and assigned with a lower loan ID is shown first.
+**Priority Quue Tiebraker:** When two loans have the same urgency, the one who registered first and assigned with a lower loan ID is shown first.
+
+## How It Works
+
+On launch, the lender is asked for a **lending cap**, which is the total amount they are wiling to lend. 
