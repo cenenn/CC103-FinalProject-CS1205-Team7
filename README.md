@@ -12,7 +12,7 @@
 </p>
 
 A console-based loan management system for informal, person-to-person lending. 
-The system is built using C++ as the final project for CC103 - Data Structures and Algorithms.
+The system is built using C++ and applies appropriate data structures and algorithm to manage and track personal lending activities.
 
 ## 📌 Overview
 
