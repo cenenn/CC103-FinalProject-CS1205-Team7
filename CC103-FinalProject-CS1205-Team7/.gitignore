@@ -1,0 +1,4 @@
+# Ignore private files/folders.
+private_folder/
+*.exe
+.vscode/
