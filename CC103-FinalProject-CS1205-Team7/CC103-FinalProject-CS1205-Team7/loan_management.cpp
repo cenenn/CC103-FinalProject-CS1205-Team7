@@ -493,14 +493,12 @@ int main()
 // Register Loan Function
 void registerLoan() {
     while (true) {
-        // Header
-        cout << "\n";
-        cout << "      ===================================================\n";
+        cout << "\n      ===================================================\n";
         cout << "                         Register Loan                 \n";
         cout << "      ===================================================\n";
 
         if (loanCount >= MAX_LOANS) {
-            cout << "\n      Maximum loan records reached."; // checks if the user already used up the maximum registration slot to avoid crashing the program
+            cout << "\n      Maximum loan records reached.";
             return;
         }
 
@@ -515,7 +513,7 @@ void registerLoan() {
         cout << "\n\n        Borrower Name [BACK to return]: ";
         getline(cin, loan.borrowerName);
 
-        if (loan.borrowerName == "BACK" || loan.borrowerName == "back") { // this checks if the user wanted to go back to main menu
+        if (loan.borrowerName == "BACK" || loan.borrowerName == "back") {
             return;
         }
 
@@ -532,30 +530,35 @@ void registerLoan() {
         getline(cin, loan.dueDate);
 
         if (loan.principal <= availableFund) {
-            loans[loanCount++] = loan; // stores the loan in an array
+            loans[loanCount++] = loan;
 
             Action a;
             a.type = ADD_LOAN;
             a.loanId = loan.id;
-            a.prompt = "Registered loan for " + loan.borrowerName;
             undoStack.push(a);
 
             cout << GREEN;
             cout << "\n\n     ===================================================";
             cout << "\n       Loan successfully registered!";
-            cout << "\n       Loan ID: " << loan.id << "A";
-            cout << "\n       ===================================================";
+            cout << "\n       Loan ID: " << loan.id;
+            cout << "\n     ===================================================";
             cout << RESET << "\n";
         }
         else {
             loanRequestQueue.enqueue(loan);
+
             cout << RED;
             cout << "\n\n     ===================================================\n";
             cout << "\n            Insufficient funds!";
-            cout << "\n       "<< loan.borrowerName << " added to waiting list.";
+            cout << "\n       " << loan.borrowerName << " added to waiting list.";
             cout << "\n     ===================================================\n";
             cout << RESET << "\n";
         }
+
+        // ✅ KEY FIX
+        refreshAvailableFund();
+        processWaitingList();
+
         offerUndo();
     }
 }
@@ -690,14 +693,11 @@ void waitingList() {
 
 // Change Lending Capital Function
 void changeLendingCapital() {
-    
     double newCapital;
 
-    cout << "\n";
-    cout << "      ===================================================\n";
+    cout << "\n      ===================================================\n";
     cout << "                     Change Lending Capital             \n";
     cout << "      ===================================================\n";
-
 
     cout << "      Current Lending Capital: ₱" << lendingCapital << "\n";
 
@@ -712,8 +712,10 @@ void changeLendingCapital() {
     lendingCapital = newCapital;
     refreshAvailableFund();
 
+    // ✅ KEY FIX
+    processWaitingList();
+
     cout << "      Lending Capital updated to ₱" << GREEN << lendingCapital << RESET << "\n";
-    return;
 }
 
 int daysUntilDue(string dueDate) {
@@ -818,30 +820,33 @@ void checkOverdueAlerts() {
 void processWaitingList() {
     refreshAvailableFund();
 
-    // Only ask if there's someone waiting AND we can actually afford the front of the queue.
     while (!loanRequestQueue.isEmpty() && loanCount < MAX_LOANS) {
         Loan next = loanRequestQueue.peek();
-        
+
         if (next.principal > availableFund) {
-            break; // FIFO: if the front doesn't fit, nobody behind gets checked either
+            break;
         }
-        
-        cout << "\n      You now have enough funds for " << next.borrowerName
-             << " (₱" << next.principal << ").";
-        cout << "\n      Proceed with lending from the waiting list? [1] Yes  [2] No: ";
-        
+
+        cout << "\n      You now have enough funds to approve:\n";
+        cout << "      → " << next.borrowerName << " (₱" << next.principal << ")";
+        cout << "\n      Proceed with lending? [1] Yes  [2] No: ";
+
         int choice;
         cin >> choice;
         cin.ignore();
-        
+
         if (choice == 1) {
             loanRequestQueue.dequeue();
             loans[loanCount++] = next;
-            cout << GREEN << "      Registered " << next.borrowerName
-                 << " (Loan ID: " << next.id << ") from waiting list.\n" << RESET;
+
+            cout << GREEN
+                 << "      Registered " << next.borrowerName
+                 << " (Loan ID: " << next.id << ")\n"
+                 << RESET;
+
             refreshAvailableFund();
         } else {
-            break; // user said no — stop asking for now
+            break;
         }
     }
 }
