@@ -10,16 +10,39 @@ Author: SeisSyete
 #include <iostream>
 #include <string>
 #include <ctime>
-// deleted chrono for efficiency since the only thing we need is the date, we dont need precise time for this
+// deleted chorono for efficiency since the only thing we need is the date, we don't need precise time for this
+#include <fstream> //this library will be used for our file handling, for JSON
 #include <vector>
 #include <iomanip>
 using namespace std;
-
 
 // |----------COLOR CODE----------|
 #define RED "\033[31m"
 #define GREEN "\033[32m"
 #define RESET "\033[0m"
+
+// |----------DATE TIME FUNCTION----------|
+int daysUntilDue(string dueDate) {
+    if (dueDate.length() != 10) {
+        return 0;
+    }
+
+    time_t now     = time(nullptr);
+
+    int year = stoi(dueDate.substr(0, 4));
+    int month = stoi(dueDate.substr(5, 2));
+    int day = stoi(dueDate.substr(8, 2));
+
+    tm due = {};
+    due.tm_year = year - 1900;
+    due.tm_mon = month - 1;
+    due.tm_mday = day;
+
+    time_t due_time = mktime(&due);
+
+    double seconds = difftime(due_time, now);
+    return seconds / (60 * 60 * 24);
+}
 
 // |----------STRUCT----------|
 
@@ -54,19 +77,6 @@ struct Action {
     double previousBalance;
     string prompt;
 };
-
-// |----------FUNCTION DECLARATION----------| >>>>> moved the function declaration after the struct because there are functions that will be used in the data structure --mgl_lgz
-//void Due(time_t now);
-void registerLoan();
-void logPayment();
-void viewActiveLoans();
-void checkOverdueAlerts();
-void waitingList();
-int daysUntilDue(string dueDate);
-void changeLendingCapital();
-Loan* findById(int id);
-void processWaitingList();
-
 
 // |----------DATA STUCTURE----------|
 
@@ -197,15 +207,15 @@ class Queue {
     }
 
     // Walk forward from the front until we land on the target node.
-    QueueNode *curr = front;
+    QueueNode *current = front;
     int i = 0;
     while (i < index) {
-        curr = curr->next;
+        current = current->next;
         i++;
     }
 
-    return curr->data;
-}
+    return current->data;
+    }
 
     bool removeAt(int index) {
         // Nothing to remove if the queue is empty.
@@ -232,17 +242,17 @@ class Queue {
         }
         else {
             // Walk to the node before the one we want to remove, so we can re-link around it.
-            QueueNode *curr = front;
+            QueueNode *current = front;
             for (int i = 0; i < index - 1; i++) {
-                curr = curr->next;
+                current = current->next;
             }
             
-            target = curr->next;
-            curr->next = target->next;
+            target = current->next;
+            current->next = target->next;
             
             // If we just removed the last node, the rear pointer must move back.
             if (target == rear) {
-                rear = curr;
+                rear = current;
             }
         }
         delete target;
@@ -252,11 +262,11 @@ class Queue {
     
     // Find the index of the first node whose loan has the given id.
     int indexOfLoanId(int id) {
-        QueueNode *curr = front;
+        QueueNode *current = front;
         int i = 0;
-        while (curr != nullptr) {
-            if (curr->data.id == id) return i;
-            curr = curr->next;
+        while (current != nullptr) {
+            if (current->data.id == id) return i;
+            current = current->next;
             i++;
         }
         return -1;
@@ -272,6 +282,7 @@ double lendingCapital = 0; // Declared outside the function so that we can use i
 double availableFund = 0;
 Stack undoStack;
 Queue loanRequestQueue;
+bool returnToMenu = false; // this will be used for returning to the main menu
 
 // PRIORITY QUEUE - used for overdue alerts, most urgent loan goes first
 
@@ -290,26 +301,24 @@ class PriorityQueue {
         }
 
         void insert(Loan* l) {
-            if (entry >= MAX_LOANS) return; // prevent overflow
+            if (entry == MAX_LOANS) // checks if the priority queue is already full
+            return;
 
             PQUrgency newEntry;
             newEntry.loan = l;
-            newEntry.priority = daysUntilDue(l->dueDate); // correct usage
+            newEntry.priority = daysUntilDue(l->dueDate); // how many days until the due date
 
-            int i = entry - 1;
-
-            // shift elements to maintain priority order
-            while (i >= 0 && (queue[i].priority > newEntry.priority ||
-            (queue[i].priority == newEntry.priority &&
-            queue[i].loan->id > newEntry.loan->id))) {
-
-            queue[i + 1] = queue[i];
-            i--;
+            int i = entry - 1; // compare the new entry with the existing entries
+            while(i >= 0 && 
+                (queue[i].priority > newEntry.priority || 
+                (queue[i].priority == newEntry.priority && 
+                queue[i].loan->id > newEntry.loan->id))) {
+                    queue[i + 1] = queue[i];
+                    i--;
+            }
+            queue[i+1] = newEntry;
+            entry++;
         }
-
-    queue[i + 1] = newEntry;
-    entry++;
-}
 
         PQUrgency getAt(int i) {
             return queue[i]; // give the element in the array
@@ -345,9 +354,7 @@ int waitingCount() {
     return loanRequestQueue.getCount();
 }
 
-// DATETIME FUNCTIONS
-
-//FIND BY ID FUNCTION
+//FIND BY ID 
 Loan* findById(int id) {
     for (int i = 0; i < loanCount; i++) {
         if (loans[i].id == id) {
@@ -367,25 +374,30 @@ Loan* findByName(const string& name) {
     return nullptr;
 }
 
-
-
 // UNDO FEATURE
-void offerUndo() {
+int offerUndo() {
     if (undoStack.isEmpty()) {
-        return;
+        return 0;
     }
-    cout << "\n      [1] Undo  [2] Continue: ";
+    cout << "\n      [1] Undo  [2] Continue  [3] Back: ";
     int choice;
     cin >> choice;
     cin.ignore();
 
     if(choice == 1) {
+
         Action lastAction = undoStack.pop(); // the last action is the one that we will pop from the stack
+
         if (lastAction.type == ADD_LOAN) { // verifies if the action type is add loan
             for(int i = 0; i < loanCount; i++) { // loop through all the loans to find what we will cancel
                 if(loans[i].id == lastAction.loanId) {
                     loans[i].isActive = false; // mark it as inactive
                     refreshAvailableFund();
+
+                    for(int j = i; j < loanCount - 1; j++) { // shift the array to remove the loan that we cancelled
+                        loans[j] = loans[j + 1];
+                    }
+                    loanCount--; // decrease the loan count because we removed a loan
                     break;
                 }
             }
@@ -407,19 +419,37 @@ void offerUndo() {
                 refreshAvailableFund();
             }
         }
+        return 1;
     }
+    else if(choice == 2) { // continue to program without undoing
+        return 0;
+    }
+    else if(choice == 3) {
+        return -1; // this will be used for returning to the main menu
+    }
+    return 0;
 }
 
+// |----------FUNCTION DECLARATION----------|
+void registerLoan();
+void logPayment();
+void viewActiveLoans();
+void checkOverdueAlerts();
+void waitingList();
+void addLendingCapital();
+string getCurrentDateTime();
+void processWaitingList();
 
 // |----------MAIN FUNCTION----------|
-int main() 
-{
+int main() {
+    system("chcp 65001"); // to run fancy border design
+
     // HEADER
     cout << "\n";
-    cout << "    ===================================================\n";
-    cout << "         SingkoSeis: Personal Loan Management System     \n";
-    cout << "          Data Structure and Algorithm | SeisSyete       \n";
-    cout << "    ===================================================\n";
+    cout << "    ╭──────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-───────────────────╮\n";
+    cout << "    .     SingkoSeis: Personal Loan Management System     .\n";
+    cout << "    .      Data Structure and Algorithm | SeisSyete       .\n";
+    cout << "    ╰──────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-───────────────────╯  \n";
 
     cout << "\n     Lending Capital: ₱";
     cin >> lendingCapital;
@@ -427,13 +457,13 @@ int main()
 
     availableFund = lendingCapital;
 
-    cout << "     You can now lend ₱" << lendingCapital;
+    cout << "\n     You can now lend ₱" << lendingCapital << "\n\n";
     int choice;
     do {
         refreshAvailableFund();
         int waiting = waitingCount();
 
-        cout << "\n=======================MAIN MENU======================\n";
+        cout << "\n  ⊹˚‧⊹˚‧︵‿︵‿︵‿︵₊୨ MAIN MENU ୧₊︵‿︵‿︵‿︵‧˚⊹‧˚⊹\n";
         cout << "\n     💵 Available Fund: ₱";
 
         if (availableFund <= lendingCapital / 2) {
@@ -452,7 +482,7 @@ int main()
         cout << "     [3] View Active Loans\n";
         cout << "     [4] Check Overdue Alerts\n";
         cout << "     [5] Waiting List\n";
-        cout << "     [6] Change Lending Capital\n";
+        cout << "     [6] Add Lending Capital\n";
         cout << "     [7] Exit\n";
         cout << "      Choice: ";
         cin >> choice;
@@ -475,7 +505,7 @@ int main()
             waitingList();
             break;
         case 6:
-            changeLendingCapital();
+            addLendingCapital();
             break;
         case 7:
             cout << "\n      Thank you for using SingkoSeis (o゜▽゜)o☆\n\n";
@@ -492,13 +522,14 @@ int main()
 
 // Register Loan Function
 void registerLoan() {
-    while (true) {
-        cout << "\n      ===================================================\n";
-        cout << "                         Register Loan                 \n";
-        cout << "      ===================================================\n";
+        // Header
+        cout << "\n";
+        cout << "      ╭────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╮\n";
+        cout << "      .                  Register Loan                 .\n";
+        cout << "      ╰────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╯\n";
 
         if (loanCount >= MAX_LOANS) {
-            cout << "\n      Maximum loan records reached.";
+            cout << "\n      Maximum loan records reached."; // checks if the user already used up the maximum registration slot to avoid crashing the program
             return;
         }
 
@@ -513,15 +544,14 @@ void registerLoan() {
         cout << "\n\n        Borrower Name [BACK to return]: ";
         getline(cin, loan.borrowerName);
 
-        if (loan.borrowerName == "BACK" || loan.borrowerName == "back") {
+        if (loan.borrowerName == "BACK" || loan.borrowerName == "back") { // this checks if the user wanted to go back to main menu
             return;
         }
 
         cout << "        Principal Amount: ";
         cin >> loan.principal;
         cin.ignore();
-
-        loan.remainingBalance = loan.principal;
+        loan.remainingBalance = loan.principal; //fix for the initialization bug(happens when you undo the a loan then add a new one)
 
         cout << "        Date Issued (YYYY-MM-DD): ";
         getline(cin, loan.dateIssued);
@@ -529,88 +559,288 @@ void registerLoan() {
         cout << "        Due Date (YYYY-MM-DD): ";
         getline(cin, loan.dueDate);
 
-        if (loan.principal <= availableFund) {
+        if (loan.principal <= availableFund) { // if the principal is less than or equal to the available fund, the loan will be registered immediately
             loans[loanCount++] = loan;
 
             Action a;
             a.type = ADD_LOAN;
             a.loanId = loan.id;
+            a.prompt = "Registered loan for " + loan.borrowerName;
             undoStack.push(a);
 
             cout << GREEN;
-            cout << "\n\n     ===================================================";
+            cout << "\n\n     ╭────────────────────────────.★..─╮";
             cout << "\n       Loan successfully registered!";
             cout << "\n       Loan ID: " << loan.id;
-            cout << "\n     ===================================================";
+            cout << "\n     ╰─..★.────────────────────────────╯";
             cout << RESET << "\n";
-        }
+        } 
         else {
-            loanRequestQueue.enqueue(loan);
-
+            loanRequestQueue.enqueue(loan); // if the principal is more than the available fund, the loan will be added to the waiting list 
             cout << RED;
-            cout << "\n\n     ===================================================\n";
+            cout << "\n\n     ╭────────────────────────────.★..─╮";
             cout << "\n            Insufficient funds!";
-            cout << "\n       " << loan.borrowerName << " added to waiting list.";
-            cout << "\n     ===================================================\n";
+            cout << "\n       "<< loan.borrowerName << " added to waiting list.";
+            cout << "\n     ╰─..★.────────────────────────────╯";
             cout << RESET << "\n";
         }
-
-        // ✅ KEY FIX
-        refreshAvailableFund();
-        processWaitingList();
-
         offerUndo();
-    }
 }
 
 // Log Payment Function
 void logPayment() {
     cout << "\n";
-    cout << "      ===================================================\n";
-    cout << "                         Log Payment                  \n";
-    cout << "      ===================================================\n";
-        if (loanCount == 0) {
+    cout << "      ╭────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╮\n";
+    cout << "      .                   Log Payment                  .\n";
+    cout << "      ╰────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╯\n";
+
+    if (loanCount == 0) {
         cout << RED << "\n      No loans registered yet.\n" << RESET;
         return;
-
     }
+
+    int id;
+    cout << "\n      Enter Loan ID: ";
+    cin >> id;
+
+    Loan* loan = findById(id);
+
+    if (!loan || !loan->isActive) {
+        cout << RED << "      Loan not found.\n" << RESET;
+        return;
+    }
+
+    double amount;
+    cout << "      Payment Amount: ";
+    cin >> amount;
+    cin.ignore();
+
+    if (amount <= 0 || amount > loan->remainingBalance) {
+        cout << RED << "      Invalid amount.\n" << RESET;
+        return;
+    }
+
+    // Save previous state for undo
+    Action a;
+    a.type = LOG_PAYMENT;
+    a.loanId = loan->id;
+    a.previousBalance = loan->remainingBalance;
+    undoStack.push(a);
+
+    // Apply payment
+    loan->remainingBalance -= amount;
+
+    Payment p;
+    p.amount = amount;
+    p.date = getCurrentDateTime();
+
+    loan->payments.push_back(p);
+
+    if (loan->remainingBalance == 0) {
+        loan->isActive = false;
+    }
+
+    refreshAvailableFund();
+
+    cout << GREEN << "\n      Payment recorded successfully.\n" << RESET;
+
+    offerUndo();
 }
 
 // View Active Loans Function
 void viewActiveLoans() {
     int subChoice;
+
     do {
         cout << "\n";
-        cout << "      ===================================================\n";
-        cout << "                      View Active Loans               \n";
-        cout << "      ===================================================\n";
+        cout << "      ╭────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╮\n";
+        cout << "      .                View Active Loans               .\n";
+        cout << "      ╰────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╯\n";
 
         cout << "\n      [1] Search Borrower\n";
-        cout << "      [2] Payment History\n";
+        cout << "      [2] Show All Active Loans\n";
         cout << "      [3] Back\n";
         cout << "       Choice: ";
         cin >> subChoice;
-        cin.ignore();
 
-    } while(subChoice != 3);
+        // ❗ FIX: prevent infinite loop if user types letters
+        if (cin.fail()) {
+            cin.clear();
+            cin.ignore(10000, '\n');
+            cout << "      Invalid input. Try again.\n";
+            continue;
+        }
+
+        cin.ignore(10000, '\n');
+
+        // ================= SEARCH =================
+        if (subChoice == 1) {
+            string name;
+
+            cout << "\n      Borrower Name: ";
+            getline(cin, name);
+
+            Loan* found = findByName(name);
+
+            if (found == nullptr || !found->isActive) {
+                cout << RED
+                     << "\n      No active loan found for \"" << name << "\".\n"
+                     << RESET;
+            }
+            else {
+                cout << "\n  ⊹˚‧⊹˚‧︵‿︵‿︵‿︵‿︵₊୨ LOAN INFO ୧₊︵‿︵‿︵‿︵‿︵‧˚⊹‧˚⊹\n";
+                cout << "        Loan ID    : " << found->id << "\n";
+                cout << "        Borrower   : " << found->borrowerName << "\n";
+                cout << "        Principal  : ₱" << found->principal << "\n";
+                cout << "        Remaining  : ₱" << found->remainingBalance << "\n";
+                cout << "        Issued     : " << found->dateIssued << "\n";
+                cout << "        Due Date   : " << found->dueDate << "\n";
+                cout << "  ⊹˚‧⊹˚‧︵‿︵‿︵‿︵‿︵₊୨ ୧₊︵‿︵‿︵‧˚⊹‧˚⊹\n";
+            }
+        }
+
+        // ================= SHOW ALL =================
+        else if (subChoice == 2) {
+            cout << "\n      ACTIVE LOANS\n";
+
+            bool foundAny = false;
+
+            for (int i = 0; i < loanCount; i++) {
+                if (loans[i].isActive) {
+                    cout << "      ID: " << loans[i].id
+                         << " | " << loans[i].borrowerName
+                         << " | ₱" << loans[i].remainingBalance
+                         << " | Due: " << loans[i].dueDate << "\n";
+                    foundAny = true;
+                }
+            }
+
+            if (!foundAny) {
+                cout << "      No active loans.\n";
+            }
+        }
+
+        else if (subChoice != 3) {
+            cout << "      Invalid choice.\n";
+        }
+
+    } while (subChoice != 3);
 }
 
+// Check Overdue Alerts Function
+void checkOverdueAlerts() {
+    cout << "\n";
+    cout << "      ╭────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╮\n";
+    cout << "      .               Check Overdue Loans              .\n";
+    cout << "      ╰────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╯\n";
+
+        // If no loans exist at all, there is nothing to check.
+    if (loanCount == 0) {
+        cout << RED << "\n      No loans registered yet.\n" << RESET;
+        return;
+    }
+
+    // Build a fresh priority queue containing only the active loans,
+    // ordered from most urgent (smallest daysUntilDue) to least urgent.
+    PriorityQueue urgencyQueue;
+    for (int i = 0; i < loanCount; i++) {
+        if (loans[i].isActive) {
+            urgencyQueue.insert(&loans[i]);
+        }
+    }
+
+    if (urgencyQueue.isEmpty()) {
+        cout << "\n      No active loans to check.\n";
+        return;
+    }
+
+    // Header with a warning motif so this section reads as urgent.
+    cout << "\n      ⊹˚‧⊹˚‧︵‿︵‿︵‿︵₊୨ ⚠  OVERDUE & UPCOMING  ⚠ ୧₊︵‿︵‿︵‿︵‧˚⊹‧˚⊹\n";
+
+    bool foundAnything = false;
+
+    // Walk the priority queue from front (most urgent) to back.
+    for (int i = 0; i < urgencyQueue.getSize(); i++) {
+        PQUrgency entry = urgencyQueue.getAt(i);
+        Loan* l = entry.loan;
+        int days = entry.priority;
+        
+        // for adding interest to those who are overdue already
+        if (days <= 0) {
+        cout << RED;
+        cout << "\n      ⚠ OVERDUE LOAN\n";
+        cout << "      Borrower: " << l->borrowerName
+             << " | ID: " << l->id
+             << " | Balance: ₱" << l->remainingBalance << "\n";
+        cout << RESET;
+
+        cout << "      Apply interest? [1] Yes  [2] No (set 0%): ";
+        int choice;
+        cin >> choice;
+
+        double rate = 0;
+
+        if (choice == 1) {
+            cout << "      Enter interest rate (%): ";
+            cin >> rate;
+        }
+
+            double prev = l->remainingBalance;
+
+            l->remainingBalance += l->remainingBalance * (rate / 100);
+
+        Action a;
+        a.type = APPLY_INTEREST;
+        a.loanId = l->id;
+        a.previousBalance = prev;
+        undoStack.push(a);
+
+        cout << GREEN << "      Interest updated.\n" << RESET;
+    }
+
+        if (days < 0) {
+            cout << RED;
+            cout << "        "
+                 << left  << setw(20) << ("OVERDUE by " + to_string(-days) + " day(s)")
+                 << " - " << left  << setw(15) << l->borrowerName
+                 << " (ID " << right << setw(3) << l->id << ")"
+                 << " - Balance: ₱" << right << setw(9) << fixed << setprecision(2) << l->remainingBalance
+                 << " - Due: " << l->dueDate << "\n";
+            cout << RESET;
+            foundAnything = true;
+        }
+        // Due within the next 7 days — show as a soft reminder.
+       else if (days <= 7) {
+            cout << "        "
+                 << left  << setw(20) << ("Due in " + to_string(days) + " day(s)")
+                 << " - " << left  << setw(15) << l->borrowerName
+                 << " (ID " << right << setw(3) << l->id << ")"
+                 << " - Balance: ₱" << right << setw(9) << fixed << setprecision(2) << l->remainingBalance
+                 << " - Due: " << l->dueDate << "\n";
+            foundAnything = true;
+        }
+        // Anything further out is not worth alerting about.
+    }
+    // If nothing was overdue or due soon, say so explicitly.
+    if (!foundAnything) {
+        cout << "        All active loans are within a safe range.\n";
+    }
+    cout << "      ⊹˚‧⊹˚‧︵‿︵‿︵‿︵‿︵‿︵‿︵₊୨ ୧₊︵‿︵‿︵‿︵‿︵‿︵‧˚⊹‧˚⊹\n";
+}
 
 // Waiting List Function
 void waitingList() {
     int subChoice;
-
     do {
-        // Refresh the fund first, then auto-register anyone whose loan now fits.
+        refreshAvailableFund();
+        
         processWaitingList();
-
         cout << "\n";
-        cout << "      ========================================================\n";
-        cout << "                        Waiting List                  \n";
-        cout << "      ======================================================\n";
+        cout << "      ╭────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╮\n";
+        cout << "      .                  Waiting List                  .\n";
+        cout << "      ╰────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╯\n";
 
-        cout << "\n      💵 Available Fund : ₱" << availableFund
-             << "   /   ₱" << lendingCapital << "\n";
+        cout << "\n      💵 Available Fund : ₱" << availableFund << "   /   ₱" << lendingCapital << "\n";
         cout << "      👥 In Queue       : " << waitingCount() << " person(s)\n";
 
         cout << "\n      [1] View Waiting List\n";
@@ -620,13 +850,13 @@ void waitingList() {
         cin >> subChoice;
         cin.ignore();
 
-        // VIEW WAITING LIST
+                // VIEW WAITING LIST
         if (subChoice == 1) {
             if (loanRequestQueue.isEmpty()) {
                 cout << RED << "\n      Waiting list is empty.\n" << RESET; 
             }
             else {
-                cout << "\n      ==============================  WAITING LIST  ==============================\n";
+                cout << "\n      ⊹˚‧⊹˚‧︵‿︵‿︵‿︵‿︵‿︵‿︵₊୨ ୧₊︵‿︵‿︵‿︵‿︵‿︵‧˚⊹‧˚⊹\n";
 
                 // Walk the queue and print each entry as a numbered row.
                 for (int i = 0; i < loanRequestQueue.getCount(); i++) {
@@ -638,7 +868,7 @@ void waitingList() {
                          << " | Due: " << l.dueDate << "\n";
                 }
 
-            cout << "      ============================================================\n";
+            cout << "      ⊹˚‧⊹˚‧︵‿︵‿︵‿︵‿︵‿︵‿︵₊୨ ୧₊︵‿︵‿︵‿︵‿︵‿︵‧˚⊹‧˚⊹\n";
             }
         }
 
@@ -649,7 +879,7 @@ void waitingList() {
             }
             else {
                 // Show the list first so the user knows which number to pick.
-                cout << "\n      ==========================================================================\n";
+                cout << "\n      ⊹˚‧⊹˚‧︵‿︵‿︵‿︵‿︵‿︵‿︵₊୨ ୧₊︵‿︵‿︵‿︵‿︵‿︵‧˚⊹‧˚⊹\n";
                 
                 for (int i = 0; i < loanRequestQueue.getCount(); i++) {
                     Loan l = loanRequestQueue.getAt(i);
@@ -660,7 +890,7 @@ void waitingList() {
                          << "\n";
                 }
                 
-                cout << "      =============================================================================\n";
+                cout << "      ⊹˚‧⊹˚‧︵‿︵‿︵‿︵‿︵‿︵‿︵₊୨ ୧₊︵‿︵‿︵‿︵‿︵‿︵‧˚⊹‧˚⊹\n";
                 
                 // Ask for the position to remove. 0 cancels the action.
                 int pos;
@@ -687,21 +917,77 @@ void waitingList() {
                 }
             }
         }
-
-    } while (subChoice != 3);
+    } while(subChoice != 3);
 }
 
-// Change Lending Capital Function
-void changeLendingCapital() {
+void processWaitingList() {
+    refreshAvailableFund();
+
+    bool processedAny = true;
+
+    while (processedAny) {
+        processedAny = false;
+
+        if (loanRequestQueue.isEmpty()) return;
+
+        Loan next = loanRequestQueue.peek();
+
+        refreshAvailableFund(); // ALWAYS refresh before decision
+
+        if (next.principal > availableFund) {
+            return; // cannot proceed further (FIFO safe stop)
+        }
+
+        cout << "\n      ======================================\n";
+        cout << "      💡 Waiting List Approval\n";
+        cout << "      Borrower: " << next.borrowerName
+             << " | ₱" << next.principal << "\n";
+
+        cout << "      Approve? [1] Yes  [2] No (stop): ";
+
+        int choice;
+        cin >> choice;
+
+        if (cin.fail()) {
+            cin.clear();
+            cin.ignore(10000, '\n');
+            cout << "      Invalid input. Stopping process.\n";
+            return;
+        }
+
+        cin.ignore(10000, '\n');
+
+        if (choice == 1) {
+
+            loanRequestQueue.dequeue();
+            loans[loanCount++] = next;
+
+            cout << GREEN
+                 << "      ✔ Approved: " << next.borrowerName << "\n"
+                 << RESET;
+
+            refreshAvailableFund();
+            processedAny = true; // 🔥 CRITICAL: allows loop to continue safely
+        }
+        else {
+            cout << "      ❌ Stopped by user.\n";
+            return; // HARD EXIT prevents infinite loop
+        }
+    }
+}
+
+// Add Lending Capital Function
+void addLendingCapital() {
     double newCapital;
 
-    cout << "\n      ===================================================\n";
-    cout << "                     Change Lending Capital             \n";
-    cout << "      ===================================================\n";
+    cout << "\n";
+    cout << "      ╭────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╮\n";
+    cout << "      .               Add Lending Capital           .\n";
+    cout << "      ╰────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╯\n";
 
-    cout << "      Current Lending Capital: ₱" << lendingCapital << "\n";
+    cout << "      Current Lending Capital: ₱" << availableFund << "\n"; // current lending capital with subtracted lent amount
 
-    cout << "\n\n      New Lending Capital: ₱";
+    cout << "\n\n      Add Lending Capital: ₱";
     cin >> newCapital;
 
     if (newCapital < 0) {
@@ -709,144 +995,20 @@ void changeLendingCapital() {
         return;
     }
 
-    lendingCapital = newCapital;
+    lendingCapital += newCapital;
     refreshAvailableFund();
-
-    // ✅ KEY FIX
-    processWaitingList();
 
     cout << "      Lending Capital updated to ₱" << GREEN << lendingCapital << RESET << "\n";
+    return;
 }
 
-int daysUntilDue(string dueDate) {
-    if (dueDate.length() != 10) return 0; // basic protection
-
+//accessing the current date and time
+string getCurrentDateTime() {
     time_t now = time(0);
+    tm *ltm = localtime(&now);
 
-    int year = stoi(dueDate.substr(0, 4));
-    int month = stoi(dueDate.substr(5, 2));
-    int day = stoi(dueDate.substr(8, 2));
+    char buffer[20];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", ltm);
 
-    tm due = {};
-    due.tm_year = year - 1900;
-    due.tm_mon = month - 1;
-    due.tm_mday = day;
-
-    time_t due_time = mktime(&due);
-
-    double seconds = difftime(due_time, now);
-    return seconds / (60 * 60 * 24);
-}
-
-// Check Overdue Alerts Function
-void checkOverdueAlerts() {
-    cout << "\n";
-    cout << "      ===================================================\n";
-    cout << "                     Check Overdue Alerts              \n";
-    cout << "      ===================================================\n";
-
-    PriorityQueue pq;
-
-    // Insert all active loans
-    for (int i = 0; i < loanCount; i++) {
-        if (loans[i].isActive) {
-            pq.insert(&loans[i]);
-        }
-    }
-
-    if (pq.isEmpty()) {
-        cout << "      No active loans.\n";
-        return;
-    }
-
-    cout << "\n      Loan Alerts:\n";
-
-    for (int i = 0; i < pq.getSize(); i++) {
-        PQUrgency entry = pq.getAt(i);
-        Loan* loan = entry.loan;
-        int days = entry.priority;
-
-        cout << "      ID: " << loan->id
-             << " | Name: " << loan->borrowerName
-             << " | Balance: ₱" << loan->remainingBalance;
-
-        if (days < 0) {
-            cout << RED << " [OVERDUE by " << -days << " days]" << RESET;
-        } else {
-            cout << " [Due in " << days << " days]";
-        }
-
-        cout << "\n";
-    }
-
-    // Apply interest to overdue loans
-    cout << "\n      Apply interest to overdue loans? (y/n): ";
-    char choice;
-    cin >> choice;
-
-    if (choice == 'y' || choice == 'Y') {
-        for (int i = 0; i < pq.getSize(); i++) {
-            PQUrgency entry = pq.getAt(i);
-            Loan* loan = entry.loan;
-
-            if (entry.priority < 0) { // overdue only
-                double interestRate;
-
-                cout << "\n      Loan ID " << loan->id << " (" << loan->borrowerName << ")";
-                cout << "\n      Enter interest rate (%): ";
-                cin >> interestRate;
-
-                double prevBalance = loan->remainingBalance;
-
-                double interest = loan->remainingBalance * (interestRate / 100);
-                loan->remainingBalance += interest;
-
-                // Save action for undo
-                Action a;
-                a.type = APPLY_INTEREST;
-                a.loanId = loan->id;
-                a.previousBalance = prevBalance;
-
-                undoStack.push(a);
-
-                cout << GREEN << "      Interest applied.\n" << RESET;
-            }
-        }
-    }
-
-    offerUndo();
-}
-
-void processWaitingList() {
-    refreshAvailableFund();
-
-    while (!loanRequestQueue.isEmpty() && loanCount < MAX_LOANS) {
-        Loan next = loanRequestQueue.peek();
-
-        if (next.principal > availableFund) {
-            break;
-        }
-
-        cout << "\n      You now have enough funds to approve:\n";
-        cout << "      → " << next.borrowerName << " (₱" << next.principal << ")";
-        cout << "\n      Proceed with lending? [1] Yes  [2] No: ";
-
-        int choice;
-        cin >> choice;
-        cin.ignore();
-
-        if (choice == 1) {
-            loanRequestQueue.dequeue();
-            loans[loanCount++] = next;
-
-            cout << GREEN
-                 << "      Registered " << next.borrowerName
-                 << " (Loan ID: " << next.id << ")\n"
-                 << RESET;
-
-            refreshAvailableFund();
-        } else {
-            break;
-        }
-    }
+    return string(buffer);
 }
