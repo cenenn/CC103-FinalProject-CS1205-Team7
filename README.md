@@ -11,52 +11,19 @@
   <a href="https://github.com/cenenn">Cenen Socito</a>
 </p>
 
-A console-based loan management system for informal, person-to-person lending. 
-The system is built using C++ and applies appropriate data structures and algorithm to manage and track personal lending activities.
+A console-based loan management system for informal, person-to-person lending. The system is built using C++ and applies appropriate data structures and algorithm to manage and track personal lending activities.
 
 ## 📌 Overview
 
-Person-to person lending is common in the Philippines but rarely tracked. As the number of borrower grows, lenders end up relying on memory or chat threads,
-which leads to missed payments, awkward confrontations and money that is never recorded. 
+Person-to person lending is common in the Philippines but is rarely tracked. Lenders end up relying on memory or chat threads, which leads to missed payments, awkward confrontations and money that is never recorded. As the number of borrowers increases, managing loans become difficult and prone to errors.
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;***SingkoSeis*** provides a structured way to:
-> * Register Loans
-> * Record Payments
-> * Track Balances
-> * Monitor Due Dates
-
-all in one single console.
-
-## ✨ Features
-
-- Register new loan with borrower details.
-- Log payments and automatically update remaining balance.
-- View all active loans by exact-name search or as a full list.
-- Track overdue and near-due alerts for better priority collection.
-- Undo the most recent transaction in case of error input.
-- Manage loan requests using a waiting list when funds are insufficient.
-- Process the waiting list in FIFO order with per-borrower approval when reopened from the menu.
-- View and manage waiting list entries.
-- Add lending capital mid-session without disturbing existing loans.
-
-## 🔁 System Flow
-
-> The system starts by asking the lender for the **lending capital**<br>
-> Main menu is displayed with **available funds**<br>
->
-> User selects an action:
-> * Register Loan
-> * Log Payment
-> * View Loans
-> * Check Overdue Loans
-> * Manage Waiting List
-> * Add Lending Capital
-> * Exit
->
-> If funds are insufficient:
-> * Borrowers are added to a **waiting list**
->
-> Reversible actions (register, payment, interest) can be rolled back via the ***Undo feature*** using **Stack**
+> * Register new loan with borrower details
+> * Record payments and automatically update remaining balance
+> * View all active loans by name search or as a full list
+> * Track due dates and identify overdue accounts
+> * Manage limited lending capital
+> * Handle excess loan requests through a waiting list.
 
 ## 💡 Data Structures
 
@@ -69,19 +36,6 @@ all in one single console.
 | Vector              | Per-loan payment history               | Append-only record of each borrower's repayments via STL `vector`.                      |
 
 **❗ Priority Queue Tiebraker:**&nbsp;&nbsp;When two loans have the same urgency, the one who registered first and assigned with a lower loan ID is shown first.
-
-## ❓ How It Works
-
-On launch, the lender is asked for a **lending cap**, which is the total amount they are wiling to lend. The system maintains the value `availableFund = lendingCapital − sum(active remaining principals)` to determine whether new loan requests can be approved.
-
-- **Overdue detection** is handled using `<ctime>`. Each due date is parsed with `mktime`, compared against `time(0)`, and the difference is converted into days.
-- **Registering a loan** stores the loan immediately if funds are available; otherwise, the borrower is placed in a waiting list that follows FIFO order.
-- **Logging a payment** subtracts from both the remaining balance and remaining principal, then frees up funds for future requests.
-- **Waiting list approval** happens manually from the Waiting List menu, where each queued request is approved or skipped one at a time in FIFO order.
-- **Search** is implemented recursively, walking the loans array one entry at a time until an exact name or ID match is found and returning the first hit.
-- **Adding capital** lets the lender raise the lending cap mid-session; `availableFund` is recomputed against the new total without touching any active loan.
-
-After every reversible action, the user is given an inline `[U]ndo` prompt, which pops the most recent action off the undo stack and reverts it.
 
 ## 🧠 Algorithm Explanation
 
@@ -141,7 +95,7 @@ Step-by-step logic for each core operation.
 
 ## ⚖️ Iterative vs Recursive Comparison
 
-This project uses **recursion** for the loan search routines (`findById`, `findByName`) and **iteration** for everything else—priority queue insertion (insertion sort), queue traversal, balance recomputation, and overdue display.
+The system uses **recursion** for the loan search routines (`findById`, `findByName`) and **iteration** for everything else—priority queue insertion (insertion sort), queue traversal, balance recomputation, and overdue display.
 
 The recursive search looks like this:
 
@@ -201,7 +155,8 @@ STL `vector` is used only for per-loan payment history, where the append-only ac
 **Trade-off:** rolling our own structures means more code to maintain and no built-in iterators or bounds checking, but it forces us to demonstrate the underlying mechanics that an STL container would otherwise hide.
 
 ### 2. Fixed-size `Loan loans[MAX_LOANS]` array
-A fixed-size array of 100 entries is used for simplicity and predictable memory usage. Although it limits scalability, it is sufficient for the intended informal-lending use case.
+A maximum of 100 loans ensures predictable memory usage and simple management.
+<b>Trade-off</b>: Limited scalability
 
 ### 3. Soft-delete via `isActive = false`
 Loans are marked inactive instead of being removed when fully paid, so payment history stays intact and the priority queue can still ignore them. The `ADD_LOAN` undo path is the one exception as it actually shifts the loan out of the array.
