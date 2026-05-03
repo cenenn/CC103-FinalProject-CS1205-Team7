@@ -187,7 +187,7 @@ Both approaches have the same asymptotic complexity (O(n) for a linear search). 
 The recursive version still finishes in microseconds at our `MAX_LOANS = 100` cap, so the difference is invisible to the user and it would only matter at tens of thousands of entries.
 
 ### Which is easier to understand?
-Recursion expresses the "check this slot, then check the rest" idea in three lines and maps directly onto the base/recursive case template taught in DSA. Iteration is clearer for traversal-heavy logic like inserting into the priority queue or recomputing the available fund.
+Recursion expresses the "check this slot, then check the rest" idea in three lines. Iteration is clearer for traversal-heavy logic like inserting into the priority queue or recomputing the available fund.
 
 ## 🛠️ Design Decisions
 
