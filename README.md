@@ -60,8 +60,6 @@ all in one single console.
 
 ## 💡 Data Structures
 
-## 💡 Data Structures
-
 | Structure           | Used for                               |Reason                                                                                   |
 |---------------------|----------------------------------------|-----------------------------------------------------------------------------------------|
 |Array                | Main loan registry (`loans[MAX_LOANS]`)| Fixed-size store with O(1) index access; cap of 100 active records.                     |
@@ -193,7 +191,7 @@ Recursion expresses the "check this slot, then check the rest" idea in three lin
 
 ## 🛠️ Design Decisions
 
-### Hand-built core data structures
+### 1. Hand-built core data structures
 Stack and Queue are implemented from scratch using **singly linked nodes**, where each node contains data and a pointer to the next node. The Stack follows a **LIFO (Last-In, First-Out)** structure using a single `top` pointer, while the Queue follows a **FIFO (First-In, First-Out)** structure using both `front` and `rear` pointers.
 
 The Priority Queue is implemented using a static array of structures, where each element stores a pointer to a loan and its computed priority. Elements are inserted in sorted order to maintain priority.
@@ -202,34 +200,34 @@ STL `vector` is used only for per-loan payment history, where the append-only ac
 
 **Trade-off:** rolling our own structures means more code to maintain and no built-in iterators or bounds checking, but it forces us to demonstrate the underlying mechanics that an STL container would otherwise hide.
 
-### Fixed-size `Loan loans[MAX_LOANS]` array
+### 2. Fixed-size `Loan loans[MAX_LOANS]` array
 A fixed-size array of 100 entries is used for simplicity and predictable memory usage. Although it limits scalability, it is sufficient for the intended informal-lending use case.
 
-### Soft-delete via `isActive = false`
+### 3. Soft-delete via `isActive = false`
 Loans are marked inactive instead of being removed when fully paid, so payment history stays intact and the priority queue can still ignore them. The `ADD_LOAN` undo path is the one exception as it actually shifts the loan out of the array.
 
-### Manual approval from the waiting list
+### 4. Manual approval from the waiting list
 User confirmation is required before approving any queued loan, even when funds are sufficient. This keeps the lender in control and prevents unintended lending.
 
 **Trade-off:** the queue does not drain on its own, so the lender must reopen the Waiting List menu and step through each request to release queued borrowers — slower throughput in exchange for explicit oversight.
 
-### Strict FIFO in `processWaitingList()`
+### 5. Strict FIFO in `processWaitingList()`
 The system stops at the first front-of-queue request that exceeds the available fund instead of skipping ahead. This may delay smaller requests but maintains queue fairness.
 
-### Single `undoStack` for all reversible actions
+### 6. Single `undoStack` for all reversible actions
 A unified undo stack covers `ADD_LOAN`, `LOG_PAYMENT`, and `APPLY_INTEREST` so the user only ever has one "undo" model.
 
 **Trade-off:** because the stack is strictly LIFO, an older mistake cannot be reverted without first undoing every newer action stacked on top of it. Selective rollback would require a per-loan undo log, which we deliberately avoided to keep the structure simple.
 
 **Known limitation:** the inline undo prompt is shown after a waitlist add, but pressing Undo there will pop whatever earlier action is on top of the stack rather than the waitlist entry. (Until that prompt is suppressed, users should remove waitlist entries from the Waiting List menu instead of pressing Undo.)
 
-### Priority Queue uses insertion sort (not a binary heap)
+### 7. Priority Queue uses insertion sort (not a binary heap)
 Insertion sort is chosen for simplicity and readability. Given the 100-loan cap, the O(n²) cost is acceptable.
 
-### Date math via `<ctime>` (`mktime` + `difftime`)
+### 8. Date math via `<ctime>` (`mktime` + `difftime`)
 Standard library functions are used for date calculations. While they lack timezone handling, they are sufficient for day-based comparisons.
 
-### Inline-prompt UX after every reversible action
+### 9. Inline-prompt UX after every reversible action
 After registering a loan, logging a payment, or applying interest, the system immediately offers an undo option, providing a safety net for input errors.
 
 **Trade-off:** the user has to dismiss the prompt with an extra keystroke even when the action was correct, which adds friction to bulk entry — but the cost is small compared to silently committing a typo.
