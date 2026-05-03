@@ -209,7 +209,7 @@ Loans are marked inactive instead of being removed when fully paid, so payment h
 ### 4. Manual approval from the waiting list
 User confirmation is required before approving any queued loan, even when funds are sufficient. This keeps the lender in control and prevents unintended lending.
 
-**Trade-off:** the queue does not drain on its own, so the lender must reopen the Waiting List menu and step through each request to release queued borrowers — slower throughput in exchange for explicit oversight.
+**Trade-off:** the queue does not drain on its own, so the lender must reopen the Waiting List menu and step through each request to release queued borrowers.
 
 ### 5. Strict FIFO in `processWaitingList()`
 The system stops at the first front-of-queue request that exceeds the available fund instead of skipping ahead. This may delay smaller requests but maintains queue fairness.
@@ -230,7 +230,7 @@ Standard library functions are used for date calculations. While they lack timez
 ### 9. Inline-prompt UX after every reversible action
 After registering a loan, logging a payment, or applying interest, the system immediately offers an undo option, providing a safety net for input errors.
 
-**Trade-off:** the user has to dismiss the prompt with an extra keystroke even when the action was correct, which adds friction to bulk entry — but the cost is small compared to silently committing a typo.
+**Trade-off:** the user has to dismiss the prompt with an extra keystroke even when the action was correct, which adds friction to bulk entry but the cost is small compared to silently committing a typo.
 
 ## 🙏 Acknowledgement
 
