@@ -141,7 +141,7 @@ Step-by-step logic for each core operation.
 
 ## ⚖️ Iterative vs Recursive Comparison
 
-This project uses **recursion** for the loan search routines (`findById`, `findByName`) and **iteration** for everything else — priority queue insertion (insertion sort), queue traversal, balance recomputation, and overdue display.
+This project uses **recursion** for the loan search routines (`findById`, `findByName`) and **iteration** for everything else—priority queue insertion (insertion sort), queue traversal, balance recomputation, and overdue display.
 
 The recursive search looks like this:
 
