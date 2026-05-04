@@ -37,19 +37,6 @@ Person-to person lending is common in the Philippines but is rarely tracked. Len
 
 **❗ Priority Queue Tiebraker:**&nbsp;&nbsp;When two loans have the same urgency, the one who registered first and assigned with a lower loan ID is shown first.
 
-## ❓ How It Works
-
-On launch, the lender enters a **lending cap**, which is the total amount they are willing to lend. The system maintains `availableFund = lendingCapital − sum(active remaining principals)` to decide whether new loan requests can be approved.
-
-- **Overdue detection** uses `<ctime>`. Each due date is parsed with `mktime`, compared against `time(0)`, and the difference is converted into days.
-- **Registering a loan** stores the loan immediately if funds are available, otherwise the borrower is queued in the waiting list under FIFO order.
-- **Logging a payment** subtracts from both the remaining balance and remaining principal, then frees up funds for future requests.
-- **Waiting list management** lets the lender approve queued requests one at a time in FIFO order or remove a specific borrower from the queue.
-- **Search** is implemented recursively, walking the loans array until an exact name or ID match is found.
-- **Adding capital** lets the lender raise the lending cap mid-session, and `availableFund` is recomputed against the new total without touching any active loan.
-
-After registering a loan or logging a payment, the user is offered an inline undo prompt that pops the most recent action from the stack and reverts it. Interest applied in the overdue screen is also pushed onto the stack but can only be undone via a subsequent action's prompt.
-
 ## 🧠 Algorithm Explanation
 
 Step-by-step logic for each core operation.
@@ -57,7 +44,7 @@ Step-by-step logic for each core operation.
 ### Register Loan
 1. Assign a new `loanId` via `nextId++` and read borrower name and principal. Date issued is set automatically to the current date.
 2. Recompute `availableFund` by subtracting all active remaining principals from the lending capital.
-3. If the principal fits, set the due date and interest rate. If rate > 0, apply it upfront `remainingBalance += remainingBalance * (rate / 100)`. Store the loan in `loans[]` and push `ADD_LOAN` onto the undo stack. Note: `remainingPrincipal` tracks the original principal only and is unaffected by interest.
+3. If the principal fits, set the due date and interest rate. If rate > 0, apply it upfront, store the loan in `loans[]` and push `ADD_LOAN` onto the undo stack. 
 4. If funds are insufficient, add the request to the waiting list, and due date and rate will be set upon approval.
 
 ### Log Payment
@@ -74,7 +61,7 @@ Step-by-step logic for each core operation.
 ### Process Waiting List (FIFO)
 1. Refresh `availableFund` and peek at the front request.
 2. If the front request exceeds available funds, block approval to preserve FIFO order so smaller requests behind it cannot skip ahead.
-3. Otherwise, prompt to approve. On confirmation, dequeue the loan, update `dateIssued` to the current date, collect due date and interest rate at that moment, apply interest to `remainingBalance` if a rate is given, then move the loan into `loans[]` and push `ADD_LOAN`. Decline skips without dequeuing.
+3. Otherwise, prompt to approve. On confirmation, dequeue the loan, update `dateIssued` to the current date, collect due date and interest rate at that moment.
 4. Each approval is a single manual action — the lender re-selects "Approve Next in Line" for the next person. A separate option removes a specific borrower by queue position.
 
 ### Undo (Stack)
