@@ -1,4 +1,4 @@
-<div>
+3<div>
   <img src="https://github.com/cenenn/CC103-FinalProject-CS1205-Team7/blob/master/loan.jpg" width="100%">
 </div>
 
@@ -69,13 +69,13 @@ Step-by-step logic for each core operation.
 ### Check Overdue Loans (Priority Queue)
 1. Build a fresh priority queue from active loans, computing `daysUntilDue` for each.
 2. Insertion sort keeps the smallest days-until-due at the front, and lower loan ID breaks ties.
-3. Display from most urgent to least. Overdue loans can take an interest rate on the spot, pushing `APPLY_INTEREST` onto the undo stack.
+3.  Display from most urgent to least. For overdue loans, the lender is prompted to apply an interest rate on the spot, if applied, the previous balance is pushed onto the undo stack as `APPLY_INTEREST`.
 
 ### Process Waiting List (FIFO)
-1. Refresh `availableFund` and loop while the queue is not empty.
-2. Peek at the front request, if it exceeds available funds, stop to preserve FIFO order.
-3. Prompt to approve or stop.  Approval dequeues the loan, updates `dateIssued` to the current date, collects due date and interest rate at that moment, applies interest to `remainingBalance` if a rate is given, then moves the loan into `loans[]` and pushes `ADD_LOAN`; decline skips.
-4. A separate option removes a specific borrower by queue position.
+1. Refresh `availableFund` and peek at the front request.
+2. If the front request exceeds available funds, block approval to preserve FIFO order so smaller requests behind it cannot skip ahead.
+3. Otherwise, prompt to approve. On confirmation, dequeue the loan, update `dateIssued` to the current date, collect due date and interest rate at that moment, apply interest to `remainingBalance` if a rate is given, then move the loan into `loans[]` and push `ADD_LOAN`. Decline skips without dequeuing.
+4. Each approval is a single manual action — the lender re-selects "Approve Next in Line" for the next person. A separate option removes a specific borrower by queue position.
 
 ### Undo (Stack)
 1. Pop the most recent action and reverse by type.
@@ -105,13 +105,10 @@ Loan* findById(int id, int index = 0) {
     }
 
     if (loans[index].id == id) {
-        Loan* match = &loans[index];
-        return findbyId (id, index + 1);
+        return &loans[index];
     }
 
-    int nextIndex = index + 1;
-    Loan* result = findById(id, nextIndex);
-    return result;
+    return findById(id, index + 1);
 }
 ```
 Meanwhile, the iteration search looks like this:
@@ -160,7 +157,7 @@ Recursion expresses the "check this slot, then check the rest" idea in three lin
 
 8. **Date math via `<ctime>`** — `mktime` and `difftime` handle day-based comparisons. Timezone handling is out of scope.
 
-9. **Inline undo prompt after every reversible action** — Each loan registration and payment immediately offers an undo prompt.
+9. **Inline undo prompt after registrations and payments** — Each loan registration and payment immediately offers an undo prompt.
 
 ## 🙏 Acknowledgement
 
