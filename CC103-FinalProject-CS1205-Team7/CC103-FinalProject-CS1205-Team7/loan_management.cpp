@@ -7,10 +7,96 @@ rather than relying on their memories.
 Author: SeisSyete
 */
 
+#include <iostream>
+#include <string>
+#include <ctime>
+#include <vector>
+#include <iomanip>
+using namespace std;    
+
 // |----------COLOR CODE----------|
 #define RED "\033[31m"
 #define GREEN "\033[32m"
 #define RESET "\033[0m"
+
+// |----------DATE TIME FUNCTION----------|
+int daysUntilDue(const string &dueDate)
+{
+    if (dueDate.length() != 10)
+        return 0;
+
+    int year = stoi(dueDate.substr(0, 4));
+    int month = stoi(dueDate.substr(5, 2));
+    int day = stoi(dueDate.substr(8, 2));
+
+    tm due = {};
+    due.tm_year = year - 1900;
+    due.tm_mon = month - 1;
+    due.tm_mday = day;
+
+    time_t now = time(nullptr);
+    time_t due_time = mktime(&due);
+
+    return (int)(difftime(due_time, now) / (60 * 60 * 24));
+}
+
+// Returns current date-time as "YYYY-MM-DD HH:MM:SS"
+string getCurrentDateTime()
+{
+    time_t now = time(nullptr);
+    tm *ltm = localtime(&now);
+    char buf[20];
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ltm);
+    return string(buf);
+}
+
+// Returns current date only as "YYYY-MM-DD"
+string getCurrentDate()
+{
+    time_t now = time(nullptr);
+    tm *ltm = localtime(&now);
+    char buf[11];
+    strftime(buf, sizeof(buf), "%Y-%m-%d", ltm);
+    return string(buf);
+}
+
+// |----------STRUCT----------|
+
+// Register Loan
+struct Payment
+{
+    string date;
+    double amount;
+};
+
+struct Loan
+{
+    int id;
+    string borrowerName;
+    double principal; // original amount
+    double remainingBalance;
+    double remainingPrincipal; // mirrors remainingBalance; drives availableFund
+    double interestRate;       // annual, %, or 0
+    string dateIssued;
+    string dueDate;
+    bool isActive;
+    vector<Payment> payments; // for payment history
+};
+
+enum ActionType
+{
+    ADD_LOAN,      // for register loan function
+    LOG_PAYMENT,   // for log payment function
+    APPLY_INTEREST // for register loan function and where the interest is applied to the remaining balance
+};
+
+struct Action
+{
+    ActionType type;
+    int loanId;
+    double amount;          // payment amount
+    double previousBalance; // balance before the action
+};
 
 // |----------DATA STRUCTURE----------|
 
@@ -211,6 +297,81 @@ Stack undoStack;
 Queue loanRequestQueue;
 bool returnToMenu = false; // this will be used for returning to the main menu
 
+// UNDO FEATURE
+int offerUndo()
+{
+    if (undoStack.isEmpty())
+    {
+        return 0;
+    }
+    cout << "\n      [1] Undo  [2] Back: ";
+    int choice;
+    cin >> choice;
+    cin.ignore();
+
+    if (choice == 1)
+    {
+
+        Action lastAction = undoStack.pop(); // the last action is the one that we will pop from the stack
+
+        if (lastAction.type == ADD_LOAN)
+        { // verifies if the action type is add loan
+            for (int i = 0; i < loanCount; i++)
+            { // loop through all the loans to find what we will cancel
+                if (loans[i].id == lastAction.loanId)
+                {
+                    for (int j = i; j < loanCount - 1; j++)
+                    {
+                        loans[j] = loans[j + 1];
+                    }
+                    loanCount--; // decrease the loan count because we removed a loan
+                    break;
+                }
+            }
+            refreshAvailableFund();
+            cout << GREEN << "      Loan registration undone.\n"
+                 << RESET;
+        }
+        else if (lastAction.type == LOG_PAYMENT)
+        {
+            Loan *loan = findById(lastAction.loanId);
+            if (loan)
+            {
+                // FIX 1a: was 'l->payments.pop_back()' — 'l' does not exist, use 'loan'
+                loan->remainingBalance = lastAction.previousBalance;
+                loan->remainingPrincipal = lastAction.previousBalance;
+                if (!loan->payments.empty())
+                    loan->payments.pop_back(); 
+                loan->isActive = (loan->remainingBalance > 0); 
+                refreshAvailableFund();
+                cout << GREEN << "      Last payment undone.\n"
+                     << RESET;
+            }
+        }
+        else if (lastAction.type == APPLY_INTEREST)
+        {
+            Loan *loan = findById(lastAction.loanId);
+            if (loan)
+            {
+                loan->remainingBalance = lastAction.previousBalance;
+                // remainingPrincipal stays unchanged — interest does not affect principal
+                refreshAvailableFund();
+                cout << GREEN << "      Interest application undone.\n"
+                     << RESET;
+            }
+        }
+        return 1;
+    }
+
+    if (choice == 2)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+
 // PRIORITY QUEUE - used for overdue alerts, most urgent loan goes first
 
 const int MAX_LOANS = 100;
@@ -397,16 +558,6 @@ int offerUndo() {
     availableFund = max(0.0, lendingCapital - lent); // subtract what's left
 }
 
-// |----------MAIN FUNCTION----------|
-int main() {
-    system("chcp 65001");
-
-    else if(choice == 3) {
-        return -1; // this will be used for returning to the main menu
-    }
-    return 0;
-}
-
 // |----------FUNCTION DECLARATION----------|
 void registerLoan();
 void logPayment();
@@ -416,6 +567,8 @@ void waitingList();
 void addLendingCapital();
 string getCurrentDateTime();
 void processWaitingList();
+
+
 
 // |----------MAIN FUNCTION----------|
 int main() {
@@ -577,66 +730,80 @@ void registerLoan() {
         offerUndo();
 }
 
-// Log Payment Function
-void logPayment() {
+// ── LOG PAYMENT ──────────────────────────────────────────────────────────────
+void logPayment()
+{
     cout << "\n";
     cout << "      ╭────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╮\n";
     cout << "      .                   Log Payment                  .\n";
     cout << "      ╰────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╯\n";
 
-    if (loanCount == 0) {
-        cout << RED << "\n      No loans registered yet.\n" << RESET;
+    if (loanCount == 0)
+    {
+        cout << RED << "\n      No loans registered yet.\n"
+             << RESET;
         return;
     }
 
     int id;
     cout << "\n      Enter Loan ID: ";
     cin >> id;
+    cin.ignore();
 
-    Loan* loan = findById(id);
-
-    if (!loan || !loan->isActive) {
-        cout << RED << "      Loan not found.\n" << RESET;
+    Loan *loan = findById(id);
+    if (!loan || !loan->isActive)
+    {
+        cout << RED << "      Loan not found or already settled.\n"
+             << RESET;
         return;
     }
 
     double amount;
-    cout << "      Payment Amount: ";
+    cout << "      Payment Amount: ₱";
     cin >> amount;
     cin.ignore();
 
-    if (amount <= 0 || amount > loan->remainingBalance) {
-        cout << RED << "      Invalid amount.\n" << RESET;
+    if (amount <= 0 || amount > loan->remainingBalance + 1e-9)
+    {
+        cout << RED << "      Invalid amount.\n"
+             << RESET;
         return;
     }
 
-    // Save previous state for undo
+    // Clamp to exact balance to avoid floating-point dust.
+    if (amount > loan->remainingBalance)
+        amount = loan->remainingBalance;
+
+    // Save state for undo BEFORE applying the payment.
     Action a;
     a.type = LOG_PAYMENT;
     a.loanId = loan->id;
-    a.previousBalance = loan->remainingBalance;
+    a.previousBalance = loan->remainingBalance; // exact balance before this payment
+    a.amount = amount;
     undoStack.push(a);
 
-    // Apply payment
+    // Apply payment.
     loan->remainingBalance -= amount;
+    loan->remainingPrincipal -= amount;
 
-    Payment p;
-    p.amount = amount;
-    p.date = getCurrentDateTime();
+    // Clamp to zero to prevent tiny negative / residual values.
+    if (loan->remainingBalance < 1e-9)
+        loan->remainingBalance = 0;
+    if (loan->remainingPrincipal < 1e-9)
+        loan->remainingPrincipal = 0;
 
+    Payment p = {getCurrentDateTime(), amount};
     loan->payments.push_back(p);
 
-    if (loan->remainingBalance == 0) {
+    if (loan->remainingBalance <= 0)
         loan->isActive = false;
-    }
 
     refreshAvailableFund();
-
-    cout << GREEN << "\n      Payment recorded successfully.\n" << RESET;
+    cout << GREEN << "\n      Payment recorded successfully.\n"
+         << RESET;
 
     offerUndo();
 }
-
 // View Active Loans Function
 void viewActiveLoans() {
     int subChoice;
@@ -1028,39 +1195,28 @@ void processWaitingList() {
     }
 }
 
-// Add Lending Capital Function
-void addLendingCapital() {
-    double newCapital;
-
+// ADD LENDING CAPITAL
+void addLendingCapital()
+{
     cout << "\n";
     cout << "      ╭────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╮\n";
-    cout << "      .               Add Lending Capital           .\n";
+    cout << "      .               Add Lending Capital               .\n";
     cout << "      ╰────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╯\n";
+    cout << "      Current Lending Capital: ₱" << lendingCapital << "\n";
 
-    cout << "      Current Lending Capital: ₱" << availableFund << "\n"; // current lending capital with subtracted lent amount
+    double add;
+    cout << "\n      Add Amount: ₱";
+    cin >> add;
+    cin.ignore();
 
-    cout << "\n\n      Add Lending Capital: ₱";
-    cin >> newCapital;
-
-    if (newCapital < 0) {
-        cout << RED << "      Invalid amount." << RESET << "\n";
+    if (add < 0)
+    {
+        cout << RED << "      Invalid amount.\n"
+             << RESET;
         return;
     }
 
-    lendingCapital += newCapital;
+    lendingCapital += add;
     refreshAvailableFund();
-
     cout << "      Lending Capital updated to ₱" << GREEN << lendingCapital << RESET << "\n";
-    return;
-}
-
-//accessing the current date and time
-string getCurrentDateTime() {
-    time_t now = time(0);
-    tm *ltm = localtime(&now);
-
-    char buffer[20];
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", ltm);
-
-    return string(buffer);
 }
