@@ -16,39 +16,32 @@ Author: SeisSyete
 
 // STACK - will be used for undo feature in case the user entered wrong inputs
 
-class StackNode
-{
+class StackNode {
 public:
     Action data; // the action we saved
     StackNode *next;
 
-    StackNode(Action a)
-    {
+    StackNode(Action a) {
         data = a;       // this is the action we will save in the stack
         next = nullptr; // assume that we don't have any action in the stack
     }
 };
 
-class Stack
-{
+class Stack {
     StackNode *top; // points to the top node and this can be used only in this function
 public:
-    Stack()
-    {
+    Stack() {
         top = nullptr; // pile starts empty and can be used anywhere
     }
 
-    void push(Action a)
-    {                                          // add a new action to the stack
+    void push(Action a) { // add a new action to the stack
         StackNode *newNode = new StackNode(a); // creates a new node where the action will be stored
         newNode->next = top;
         top = newNode;
     }
 
-    Action pop()
-    { // delete the last action
-        if (top == nullptr)
-        {
+    Action pop() { // delete the last action
+        if (top == nullptr) {
             cout << "      No recent action." << endl;
             return Action(); // means to return a blank/empty action
         }
@@ -61,35 +54,30 @@ public:
 
     // action peek was removed because it is not used in the program, and it is not necessary for the undo feature to work.
 
-    bool isEmpty()
-    {
+    bool isEmpty() {
         return top == nullptr; // is top empty? then return it as empty
     }
 };
 
 // QUEUE - used for waiting list if funds are not enough
-class QueueNode
-{
+class QueueNode {
 public:
     Loan data;
     QueueNode *next;
 
-    QueueNode(Loan l)
-    {
+    QueueNode(Loan l) {
         data = l;
         next = nullptr;
     }
 };
 
-class Queue
-{
+class Queue {
 private:
     QueueNode *front;
     QueueNode *rear;
     int count; // tracks people in the waiting list
 public:
-    Queue()
-    {
+    Queue() {
         front = nullptr; // initialize that the node is empty
         rear = nullptr;
         count = 0;
@@ -99,22 +87,18 @@ public:
     {
         QueueNode *newNode = new QueueNode(l); // creates new node that stores registered loan
 
-        if (rear == nullptr)
-        {                           // checks if the rear is empty or has one element stored
+        if (rear == nullptr) { // checks if the rear is empty or has one element stored
             front = rear = newNode; // the front and rear will be the same because there's only one element in the queue
         }
-        else
-        {
+        else {
             rear->next = newNode; // if rear is not empty, link the new node to the back of the queue
             rear = newNode;       // then update rear because newNode is the last element
         }
         count++; // every time we add a new node, the count will increase by 1
     }
 
-    Loan dequeue()
-    {
-        if (front == nullptr)
-        { // checks if node is not empty
+    Loan dequeue() {
+        if (front == nullptr) { // checks if node is not empty
             cout << "Waiting list is empty." << endl;
             return Loan();
         }
@@ -122,8 +106,7 @@ public:
         Loan data = temp->data;  // saves the data to temp
         front = front->next;     // front will update to the next element
 
-        if (front == nullptr)
-        {
+        if (front == nullptr) {
             rear = nullptr; // if it's empty reset rear to null
         }
         delete temp;
@@ -131,71 +114,57 @@ public:
         return data;
     }
 
-    Loan peek()
-    {
-        if (front == nullptr)
-        {
+    Loan peek() {
+        if (front == nullptr) {
             return Loan();
         }
         return front->data;
     }
 
-    bool isEmpty()
-    {
+    bool isEmpty() {
         return front == nullptr;
     }
 
-    int getCount()
-    {
+    int getCount() {
         return count; // this will return how many people are in the waiting list
     }
 
     // Return the Loan stored at the given position in the queue.
 
-    Loan getAt(int index)
-    {
-        if (index < 0 || index >= count)
-        { // Reject indices that are out of range up front.
+    Loan getAt(int index) {
+        if (index < 0 || index >= count) { // Reject indices that are out of range up front.
             return Loan();
         }
 
         // Walk forward from the front until we land on the target node.
         QueueNode *current = front;
-        for (int i = 0; i < index; i++)
-        {
+        for (int i = 0; i < index; i++) {
             current = current->next;
         }
         return current->data;
     }
 
-    bool removeAt(int index)
-    {
-        // Nothing to remove if the queue is empty.
-        if (!front || index < 0 || index >= count)
-        {
+    bool removeAt(int index) { // Nothing to remove if the queue is empty.
+        if (!front || index < 0 || index >= count) {
             return false;
         }
 
         QueueNode *target;
 
-        if (index == 0)
-        {
+        if (index == 0) {
             // Removing the front: shift the head pointer forward.
             target = front;
             front = front->next;
 
             // If the queue is now empty, the rear pointer must reset too.
-            if (front == nullptr)
-            {
+            if (front == nullptr) {
                 rear = nullptr;
             }
         }
-        else
-        {
+        else {
             // Walk to the node before the one we want to remove, so we can re-link around it.
             QueueNode *current = front;
-            for (int i = 0; i < index - 1; i++)
-            {
+            for (int i = 0; i < index - 1; i++) {
                 current = current->next;
             }
 
@@ -203,8 +172,7 @@ public:
             current->next = target->next;
 
             // If we just removed the last node, the rear pointer must move back.
-            if (target == rear)
-            {
+            if (target == rear) {
                 rear = current;
             }
         }
@@ -218,25 +186,21 @@ public:
 
 const int MAX_LOANS = 100;
 
-struct PQUrgency
-{
+struct PQUrgency {
     Loan *loan;
     int priority; // daysUntilDue — smaller means more urgent
 };
 
-class PriorityQueue
-{
+class PriorityQueue {
 private:
     PQUrgency queue[MAX_LOANS];
     int entry; // how many loans are inside the priority queue array
 public:
-    PriorityQueue()
-    {
+    PriorityQueue() {
         entry = 0; // initialize that priority queue is empty
     }
 
-    void insert(Loan *l)
-    {
+    void insert(Loan *l) {
         if (entry == MAX_LOANS) // checks if the priority queue is already full
             return;
 
@@ -248,8 +212,7 @@ public:
         while (i >= 0 &&
                (queue[i].priority > newEntry.priority ||
                 (queue[i].priority == newEntry.priority &&
-                 queue[i].loan->id > newEntry.loan->id)))
-        {
+                 queue[i].loan->id > newEntry.loan->id))) {
             queue[i + 1] = queue[i];
             i--;
         }
@@ -257,18 +220,15 @@ public:
         entry++;
     }
 
-    PQUrgency getAt(int i)
-    {
+    PQUrgency getAt(int i) {
         return queue[i];
     }
 
-    int getSize()
-    {
+    int getSize() {
         return entry;
     }
 
-    bool isEmpty()
-    {
+    bool isEmpty() {
         return entry == 0;
     }
 };
@@ -285,13 +245,10 @@ Queue loanRequestQueue;
 // |----------OTHER FUNCTIONS----------|
 
 // UPDATE AVAILABLE FUND
-void refreshAvailableFund()
-{
+void refreshAvailableFund() {
     double lent = 0; // this will track the total money that has been lent out
-    for (int i = 0; i < loanCount; i++)
-    { // loop through all loans
-        if (loans[i].isActive)
-        {
+    for (int i = 0; i < loanCount; i++) { // loop through all loans
+        if (loans[i].isActive) {
             lent += loans[i].remainingPrincipal; // adds up all active balances
         }
     }
@@ -299,8 +256,7 @@ void refreshAvailableFund()
 }
 
 // |----------MAIN FUNCTION----------|
-int main()
-{
+int main() {
     system("chcp 65001");
 
     cout << "\n";
@@ -316,23 +272,20 @@ int main()
     cout << "\n     You can now lend ₱" << lendingCapital << "\n";
 
     int choice;
-    do
-    {
+    do {
         refreshAvailableFund();
         int waiting = loanRequestQueue.getCount();
 
         cout << "\n  ⊹˚‧⊹˚‧︵‿︵‿︵‿︵₊୨ MAIN MENU ୧₊︵‿︵‿︵‿︵‧˚⊹‧˚⊹\n";
         cout << "\n     💵 Available Fund: ₱";
 
-        if (availableFund <= lendingCapital / 2)
-        {
+        if (availableFund <= lendingCapital / 2) {
             cout << RED;
         }
 
         cout << availableFund << RESET << "   /   ₱" << lendingCapital << "\n";
 
-        if (waiting > 0)
-        {
+        if (waiting > 0) {
             cout << "     Person(s) in waiting list: " << waiting << "\n";
         }
 
@@ -382,15 +335,13 @@ int main()
 // |----------FUNCTION DEFINITION----------|
 
 // Register Loan Function
-void registerLoan()
-{
+void registerLoan() {
     cout << "\n";
     cout << "      ╭────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╮\n";
     cout << "      .                  Register Loan                 .\n";
     cout << "      ╰────────────────-·-ˋˏ-༻𖤓༺-ˎˊ·-────────────────╯\n";
 
-    if (loanCount >= MAX_LOANS)
-    {
+    if (loanCount >= MAX_LOANS) {
         cout << RED << "\n      Maximum loan records reached.\n"
              << RESET;
         return;
@@ -419,8 +370,7 @@ void registerLoan()
     loan.dateIssued = getCurrentDate();
     cout << "      Date Issued: " << loan.dateIssued << "\n";
 
-    if (loan.principal <= availableFund)
-    {
+    if (loan.principal <= availableFund) {
         cout << "      Due Date    (YYYY-MM-DD): ";
         getline(cin, loan.dueDate);
 
@@ -428,8 +378,7 @@ void registerLoan()
         cin >> loan.interestRate;
         cin.ignore();
 
-        if (loan.interestRate > 0)
-        {
+        if (loan.interestRate > 0) {
             loan.remainingBalance += loan.remainingBalance * (loan.interestRate / 100.0);
             // remainingPrincipal stays as principal — used only for fund tracking
         }
@@ -452,9 +401,7 @@ void registerLoan()
 
         offerUndo();
     }
-    else
-    {
-        // Enqueue without due date / interest — to be filled when funds become available
+    else { // Enqueue without due date / interest — to be filled when funds become available
         cout << RED << "\n      Insufficient funds. Adding to waiting list...\n"
              << RESET;
         loan.dueDate = "";
@@ -465,4 +412,3 @@ void registerLoan()
              << RESET;
     }
 }
-
