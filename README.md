@@ -42,56 +42,40 @@ Person-to person lending is common in the Philippines but is rarely tracked. Len
 Step-by-step logic for each core operation.
 
 ### Register Loan
-- The system automatically assigns a new `loanId` using `nextId++` and creates a `Loan` structure.
-- It reads the borrower’s name, principal amount, issue date, and due date.
-- The system updates `availableFund` by subtracting the sum of active remaining principals from the lending capital.
-- If the principal is less than or equal to the available fund, the loan is stored in the `loans[]` array and an `ADD_LOAN` action is pushed onto the undo stack.
-- Otherwise, the loan request is enqueued onto the waiting list and processed later from the Waiting List menu.
-- Finally, the undo prompt is offered. 
+1. Assign a new `loanId` via `nextId++` and read borrower name, principal, issue date, and due date.
+2. Recompute `availableFund` by subtracting all active remaining principals from the lending capital.
+3. If the principal fits, store the loan in `loans[]` and push `ADD_LOAN` onto the undo stack. Lastly, if funds are short, enqueue the request in the waiting list.
 
 ### Log Payment
-- The system locates the loan using a recursive `findById(id)`.
-- It stores the current `remainingBalance` in `Action.previousBalance` for undo purposes.
-- The payment amount is subtracted from both the remaining balance and the remaining principal. If the balance becomes zero, the loan is marked inactive.
-- The payment is appended to the loan’s payment history (`vector<Payment>`).
-- A `LOG_PAYMENT` action is pushed onto the undo stack.
-- The system refreshes `availableFund` and offers the undo prompt.
+1. Find the loan via `findById(id)` and save the current `remainingBalance` for undo.
+2. Subtract the payment from both `remainingBalance` and `remainingPrincipal`; mark inactive at zero.
+3. Append the entry to `vector<Payment>`, push `LOG_PAYMENT`, and refresh `availableFund`.
 
 ### Check Overdue Alerts (Priority Queue)
-- A new priority queue is built containing only active loans.
-- For each loan, the system calculates `daysUntilDue(dueDate)` using `mktime` and `difftime`.
-- Loans are inserted into the priority queue using insertion sort, with the smallest days-until-due placed at the front.
-- Loan ID is used as a tie-breaker when two loans share the same urgency.
-- The queue is then displayed from the most urgent to the least urgent loan.
-- For overdue loans, the user can apply an interest rate on the spot, and an `APPLY_INTEREST` action is pushed onto the undo stack.
+1. Build a fresh priority queue from active loans, computing `daysUntilDue` for each.
+2. Insertion sort keeps the smallest days-until-due at the front, and lower loan ID breaks ties.
+3. Display from most urgent to least. Overdue loans can take an interest rate on the spot, pushing `APPLY_INTEREST` onto the undo stack.
 
-### Process Waiting List (FIFO + user confirmation)
-- Triggered when the user opens the Waiting List menu.
-- The system refreshes `availableFund` and loops while the queue is not empty.
-- The front request is examined without removing it.
-- If the requested principal exceeds the available fund, the loop stops to preserve FIFO order.
-- Otherwise, the user is prompted to approve or stop.
-  - If approved, the loan is dequeued and appended to the active loans array.
-  - If declined, the loop exits and the queue stays untouched.
+### Process Waiting List (FIFO)
+1. Refresh `availableFund` and loop while the queue is not empty.
+2. Peek at the front request, if it exceeds available funds, stop to preserve FIFO order.
+3. Prompt to approve or stop. Approval dequeues the loan into `loans[]` and decline ends the loop.
+4. A separate option removes a specific borrower by queue position.
 
 ### Undo (Stack)
-- If the undo stack is empty, no action is performed.
-- Otherwise, the most recent action is popped from the stack.
-- The system checks the action type and reverses it accordingly:
-  - `ADD_LOAN`: marks the loan inactive, shifts it out of the `loans[]` array, decrements `loanCount`, and refreshes funds.
-  - `LOG_PAYMENT`: restores the previous balance and principal, reactivates the loan if needed, and removes the last payment entry from the history.
-  - `APPLY_INTEREST`: restores the previous balance.
+1. Pop the most recent action and reverse by type.
+2. `ADD_LOAN` — marks the loan inactive, shifts it out of `loans[]`, decrements `loanCount`, refreshes funds.
+3. `LOG_PAYMENT` — restores the previous balance and principal, reactivates if needed, pops the last payment entry.
+4. `APPLY_INTEREST` — restores the previous balance.
 
-### Search by ID / Name (Recursive)
-- Both `findById` and `findByName` are implemented recursively with a default `index = 0` parameter.
-- The base case returns `nullptr` once the index passes `loanCount`, or returns the address of the matching loan if a hit is found.
-- Otherwise, the function recurses on `index + 1`.
-- Both return only the first match.
+### Search by ID and Name (Recursive)
+1. `findById` and `findByName` recurse starting at `index = 0`.
+2. Base case: return `nullptr` when `index >= loanCount`, or return the matching address on a hit.
+3. Only the first match is returned.
 
 ### Add Lending Capital
-- Reads a non-negative top-up amount from the user.
-- Adds it to `lendingCapital` and recomputes `availableFund` against the new total.
-- Active loans are not modified, so existing balances and undo history remain intact.
+1. Read a non-negative top-up and add it to `lendingCapital`.
+2. Recompute `availableFund` but active loans, balances, and undo history remains untouched.
 
 ## ⚖️ Iterative vs Recursive Comparison
 
@@ -129,7 +113,7 @@ Loan* findById(int id) {
 ```
 
 ### Which is faster?
-Both approaches have the same asymptotic complexity (O(n) for a linear search). In practice iteration is slightly faster because recursion adds function-call overhead — every recursive call pushes a new stack frame with its own copies of `id` and `index`, while a loop just increments a counter in place.
+Both approaches have the same asymptotic complexity (O(n) for a linear search). In practice iteration is slightly faster because recursion adds function-call overhead as every recursive call pushes a new stack frame with its own copies of `id` and `index`, while a loop just increments a counter in place.
 
 **Example.** Searching for loan ID `50` in a fully-loaded `loans[100]`.
 
@@ -145,48 +129,24 @@ Recursion expresses the "check this slot, then check the rest" idea in three lin
 
 ## 🛠️ Design Decisions
 
-### 1. Hand-built core data structures
-Stack and Queue are implemented from scratch using **singly linked nodes**, where each node contains data and a pointer to the next node. The Stack follows a **LIFO (Last-In, First-Out)** structure using a single `top` pointer, while the Queue follows a **FIFO (First-In, First-Out)** structure using both `front` and `rear` pointers.
+1. **Hand-built Stack and Queue** — Both use singly linked nodes (Stack: one `top` pointer; Queue: `front` and `rear` pointers). The Priority Queue is a sorted static array. STL `vector` is used only for payment history. Building them manually exposes the mechanics an STL container would hide.
 
-The Priority Queue is implemented using a static array of structures, where each element stores a pointer to a loan and its computed priority. Elements are inserted in sorted order to maintain priority.
+2. **Fixed-size `Loan loans[MAX_LOANS]` array** — 100 entries cap memory at a predictable size and fit the informal-lending scope.
 
-STL `vector` is used only for per-loan payment history, where the append-only access pattern is a natural fit.
+3. **Soft-delete via `isActive = false`** — Paid loans are flagged inactive rather than removed, keeping payment history intact and letting the priority queue skip them. Only the `ADD_LOAN` undo path physically shifts a loan out of the array.
 
-**Trade-off:** rolling our own structures means more code to maintain and no built-in iterators or bounds checking, but it forces us to demonstrate the underlying mechanics that an STL container would otherwise hide.
+4. **Manual waiting-list approval** — The lender confirms every queued loan even when funds allow it. The queue does not auto-drain, trading throughput for explicit oversight.
 
-### 2. Fixed-size `Loan loans[MAX_LOANS]` array
-A maximum of 100 loans ensures predictable memory usage and simple management.
-<b>Trade-off</b>: Limited scalability
+5. **Strict FIFO in `processWaitingList()`** — The loop stops at the first front-of-queue entry that exceeds available funds instead of skipping ahead. Smaller requests may wait, but fairness is preserved.
 
-### 3. Soft-delete via `isActive = false`
-Loans are marked inactive instead of being removed when fully paid, so payment history stays intact and the priority queue can still ignore them. The `ADD_LOAN` undo path is the one exception as it actually shifts the loan out of the array.
+6. **Single `undoStack` for all reversible actions** — One stack covers `ADD_LOAN`, `LOG_PAYMENT`, and `APPLY_INTEREST`. Older mistakes can only be reached by undoing every newer action above them first.
 
-### 4. Manual approval from the waiting list
-User confirmation is required before approving any queued loan, even when funds are sufficient. This keeps the lender in control and prevents unintended lending.
+7. **Insertion sort for the Priority Queue** — Chosen for readability. The O(n²) cost is acceptable under the 100-loan cap.
 
-**Trade-off:** the queue does not drain on its own, so the lender must reopen the Waiting List menu and step through each request to release queued borrowers.
+8. **Date math via `<ctime>`** — `mktime` and `difftime` handle day-based comparisons. Timezone handling is out of scope.
 
-### 5. Strict FIFO in `processWaitingList()`
-The system stops at the first front-of-queue request that exceeds the available fund instead of skipping ahead. This may delay smaller requests but maintains queue fairness.
-
-### 6. Single `undoStack` for all reversible actions
-A unified undo stack covers `ADD_LOAN`, `LOG_PAYMENT`, and `APPLY_INTEREST` so the user only ever has one "undo" model.
-
-**Trade-off:** because the stack is strictly LIFO, an older mistake cannot be reverted without first undoing every newer action stacked on top of it. Selective rollback would require a per-loan undo log, which we deliberately avoided to keep the structure simple.
-
-**Known limitation:** the inline undo prompt is shown after a waitlist add, but pressing Undo there will pop whatever earlier action is on top of the stack rather than the waitlist entry. (Until that prompt is suppressed, users should remove waitlist entries from the Waiting List menu instead of pressing Undo.)
-
-### 7. Priority Queue uses insertion sort (not a binary heap)
-Insertion sort is chosen for simplicity and readability. Given the 100-loan cap, the O(n²) cost is acceptable.
-
-### 8. Date math via `<ctime>` (`mktime` + `difftime`)
-Standard library functions are used for date calculations. While they lack timezone handling, they are sufficient for day-based comparisons.
-
-### 9. Inline-prompt UX after every reversible action
-After registering a loan, logging a payment, or applying interest, the system immediately offers an undo option, providing a safety net for input errors.
-
-**Trade-off:** the user has to dismiss the prompt with an extra keystroke even when the action was correct, which adds friction to bulk entry but the cost is small compared to silently committing a typo.
+9. **Inline undo prompt after every reversible action** — Each register, payment, or interest update immediately offers an undo, catching typos before they persist.
 
 ## 🙏 Acknowledgement
 
-We would like to express our sincere gratitude to our instructor, Ma'am Fatima Marie Agdon, MSCS, for her guidance, support, and valuable insights throughout the development of this project. Her dedication to teaching and encouragement greatly contributed to our understanding of data structures and algorithms, and to the successful completion of this system.
+We would like to express our sincere gratitude to our instructor, Ma'am Fatima Marie Agdon, MSCS, for her guidance, support, and valuable insights throughout this project. Her dedication to teaching and her encouragement greatly contributed to our understanding of data structures and algorithms and to the successful completion of this system.
