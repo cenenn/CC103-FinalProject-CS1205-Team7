@@ -48,7 +48,7 @@ On launch, the lender enters a **lending cap**, which is the total amount they a
 - **Search** is implemented recursively, walking the loans array until an exact name or ID match is found.
 - **Adding capital** lets the lender raise the lending cap mid-session, and `availableFund` is recomputed against the new total without touching any active loan.
 
-After every reversible action, the user is offered an inline undo prompt that pops the most recent action from the stack and reverts it.
+After registering a loan or logging a payment, the user is offered an inline undo prompt that pops the most recent action from the stack and reverts it. Interest applied in the overdue screen is also pushed onto the stack but can only be undone via a subsequent action's prompt.
 
 ## 🧠 Algorithm Explanation
 
@@ -106,7 +106,7 @@ Loan* findById(int id, int index = 0) {
 
     if (loans[index].id == id) {
         Loan* match = &loans[index];
-        return match;
+        return findbyId (id, index + 1);
     }
 
     int nextIndex = index + 1;
@@ -160,7 +160,7 @@ Recursion expresses the "check this slot, then check the rest" idea in three lin
 
 8. **Date math via `<ctime>`** — `mktime` and `difftime` handle day-based comparisons. Timezone handling is out of scope.
 
-9. **Inline undo prompt after every reversible action** — Each register, payment, or interest update immediately offers an undo, catching typos before they persist.
+9. **Inline undo prompt after every reversible action** — Each loan registration and payment immediately offers an undo prompt.
 
 ## 🙏 Acknowledgement
 
