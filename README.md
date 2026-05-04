@@ -150,3 +150,5 @@ Recursion expresses the "check this slot, then check the rest" idea in three lin
 ## 🙏 Acknowledgement
 
 We would like to express our sincere gratitude to our instructor, Ma'am Fatima Marie Agdon, MSCS, for her guidance, support, and valuable insights throughout this project. Her dedication to teaching and her encouragement greatly contributed to our understanding of data structures and algorithms and to the successful completion of this system.
+
+<img src="https://github.com/cenenn/CC103-FinalProject-CS1205-Team7/blob/master/footer.jpg" width="100%">
