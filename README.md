@@ -37,21 +37,36 @@ Person-to person lending is common in the Philippines but is rarely tracked. Len
 
 **❗ Priority Queue Tiebraker:**&nbsp;&nbsp;When two loans have the same urgency, the one who registered first and assigned with a lower loan ID is shown first.
 
+## ❓ How It Works
+
+On launch, the lender enters a **lending cap**, which is the total amount they are willing to lend. The system maintains `availableFund = lendingCapital − sum(active remaining principals)` to decide whether new loan requests can be approved.
+
+- **Overdue detection** uses `<ctime>`. Each due date is parsed with `mktime`, compared against `time(0)`, and the difference is converted into days.
+- **Registering a loan** stores the loan immediately if funds are available, otherwise the borrower is queued in the waiting list under FIFO order.
+- **Logging a payment** subtracts from both the remaining balance and remaining principal, then frees up funds for future requests.
+- **Waiting list management** lets the lender approve queued requests one at a time in FIFO order or remove a specific borrower from the queue.
+- **Search** is implemented recursively, walking the loans array until an exact name or ID match is found.
+- **Adding capital** lets the lender raise the lending cap mid-session, and `availableFund` is recomputed against the new total without touching any active loan.
+
+After every reversible action, the user is offered an inline undo prompt that pops the most recent action from the stack and reverts it.
+
 ## 🧠 Algorithm Explanation
 
 Step-by-step logic for each core operation.
 
 ### Register Loan
-1. Assign a new `loanId` via `nextId++` and read borrower name, principal, issue date, and due date.
+1. Assign a new `loanId` via `nextId++` and read borrower name and principal. Date issued is set automatically to the current date.
 2. Recompute `availableFund` by subtracting all active remaining principals from the lending capital.
-3. If the principal fits, store the loan in `loans[]` and push `ADD_LOAN` onto the undo stack. Lastly, if funds are short, enqueue the request in the waiting list.
+3. If the principal fits, set the due date and interest rate. If rate > 0, apply it upfront `remainingBalance += remainingBalance * (rate / 100)`. Store the loan in `loans[]` and push `ADD_LOAN` onto the undo stack. Note: `remainingPrincipal` tracks the original principal only and is unaffected by interest.
+4. If funds are insufficient, add the request to the waiting list, and due date and rate will be set upon approval.
 
 ### Log Payment
 1. Find the loan via `findById(id)` and save the current `remainingBalance` for undo.
-2. Subtract the payment from both `remainingBalance` and `remainingPrincipal`; mark inactive at zero.
-3. Append the entry to `vector<Payment>`, push `LOG_PAYMENT`, and refresh `availableFund`.
+2. Validate the payment amount with a small epsilon (`1e-9`) so that interest-adjusted balances can be fully settled. Amounts exceeding the adjusted balance are rejected.
+3. Subtract the payment from both `remainingBalance` and `remainingPrincipal`, clamp both to exactly zero when the residual is below `1e-9` and mark the loan inactive at zero.
+4. Append the entry to `vector<Payment>`, push `LOG_PAYMENT`, and refresh `availableFund`.
 
-### Check Overdue Alerts (Priority Queue)
+### Check Overdue Loans (Priority Queue)
 1. Build a fresh priority queue from active loans, computing `daysUntilDue` for each.
 2. Insertion sort keeps the smallest days-until-due at the front, and lower loan ID breaks ties.
 3. Display from most urgent to least. Overdue loans can take an interest rate on the spot, pushing `APPLY_INTEREST` onto the undo stack.
@@ -59,14 +74,14 @@ Step-by-step logic for each core operation.
 ### Process Waiting List (FIFO)
 1. Refresh `availableFund` and loop while the queue is not empty.
 2. Peek at the front request, if it exceeds available funds, stop to preserve FIFO order.
-3. Prompt to approve or stop. Approval dequeues the loan into `loans[]` and decline ends the loop.
+3. Prompt to approve or stop.  Approval dequeues the loan, updates `dateIssued` to the current date, collects due date and interest rate at that moment, applies interest to `remainingBalance` if a rate is given, then moves the loan into `loans[]` and pushes `ADD_LOAN`; decline skips.
 4. A separate option removes a specific borrower by queue position.
 
 ### Undo (Stack)
 1. Pop the most recent action and reverse by type.
-2. `ADD_LOAN` — marks the loan inactive, shifts it out of `loans[]`, decrements `loanCount`, refreshes funds.
-3. `LOG_PAYMENT` — restores the previous balance and principal, reactivates if needed, pops the last payment entry.
-4. `APPLY_INTEREST` — restores the previous balance.
+2. `ADD_LOAN` finds the loan by ID, shifts every later entry one slot left, decrements `loanCount`, and refreshes funds.
+3. `LOG_PAYMENT` restores the previous balance and principal, reactivates if needed, and pops the last payment entry.
+4. `APPLY_INTEREST` restores the previous balance.
 
 ### Search by ID and Name (Recursive)
 1. `findById` and `findByName` recurse starting at `index = 0`.
@@ -113,7 +128,7 @@ Loan* findById(int id) {
 ```
 
 ### Which is faster?
-Both approaches have the same asymptotic complexity (O(n) for a linear search). In practice iteration is slightly faster because recursion adds function-call overhead as every recursive call pushes a new stack frame with its own copies of `id` and `index`, while a loop just increments a counter in place.
+Both approaches have the same asymptotic complexity (O(n) for a linear search. In practice iteration is slightly faster because recursion adds function-call overhead as every recursive call pushes a new stack frame with its own copies of `id` and `index`, while a loop just increments a counter in place.
 
 **Example.** Searching for loan ID `50` in a fully-loaded `loans[100]`.
 
@@ -129,15 +144,15 @@ Recursion expresses the "check this slot, then check the rest" idea in three lin
 
 ## 🛠️ Design Decisions
 
-1. **Hand-built Stack and Queue** — Both use singly linked nodes (Stack: one `top` pointer; Queue: `front` and `rear` pointers). The Priority Queue is a sorted static array. STL `vector` is used only for payment history. Building them manually exposes the mechanics an STL container would hide.
+1. **Hand-built Stack and Queue** — Both use singly linked nodes (Stack: one `top` pointer; Queue: `front` and `rear` pointers). The Priority Queue is a sorted static array. STL `vector` is used only for payment history and building them manually exposes the mechanics an STL container would hide.
 
 2. **Fixed-size `Loan loans[MAX_LOANS]` array** — 100 entries cap memory at a predictable size and fit the informal-lending scope.
 
 3. **Soft-delete via `isActive = false`** — Paid loans are flagged inactive rather than removed, keeping payment history intact and letting the priority queue skip them. Only the `ADD_LOAN` undo path physically shifts a loan out of the array.
 
-4. **Manual waiting-list approval** — The lender confirms every queued loan even when funds allow it. The queue does not auto-drain, trading throughput for explicit oversight.
+4. **Manual waiting-list approval** — The lender confirms every queued loan even when funds allow it. The queue does not auto-drain, trading efficiency for explicit oversight.
 
-5. **Strict FIFO in `processWaitingList()`** — The loop stops at the first front-of-queue entry that exceeds available funds instead of skipping ahead. Smaller requests may wait, but fairness is preserved.
+5. **Strict FIFO in `waitingList()`** — The lender cannot skip a front-of-queue entry that exceeds available funds. Smaller requests behind it must wait to preserve arrival order.
 
 6. **Single `undoStack` for all reversible actions** — One stack covers `ADD_LOAN`, `LOG_PAYMENT`, and `APPLY_INTEREST`. Older mistakes can only be reached by undoing every newer action above them first.
 
