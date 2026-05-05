@@ -1,4 +1,4 @@
-3<div>
+<div>
   <img src="https://github.com/cenenn/CC103-FinalProject-CS1205-Team7/blob/master/loan.jpg" width="100%">
 </div>
 
